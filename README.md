@@ -9,6 +9,7 @@ A lightweight 3D pixel-art sandbox you can run locally in a browser.
 - **E**: line build mode (press once to start from hovered cell, move cursor, press again to confirm)
 - **1–5**: select material
 - **Ctrl+S**: save
+- **Ctrl+Z"": undo
 - **L**: load
 - **R**: reset
 
@@ -18,13 +19,6 @@ A lightweight 3D pixel-art sandbox you can run locally in a browser.
 - **Brick**
 - **Concrete**
 - **Glass** (transparent)
-
-## Structure presets
-
-- **Wood Floor**: 5x5 wood floor tile
-- **Wall**: 5x3 wood wall segment
-- **Table**: simple wooden table
-- **Chair**: simple wooden chair
 
 ## Run locally (Windows)
 
