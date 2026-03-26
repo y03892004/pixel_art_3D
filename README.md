@@ -1,4 +1,4 @@
-# House Builder 3D (Lightweight Web)
+# Pixel Art 3D
 
 A lightweight 3D pixel-art sandbox you can run locally in a browser.
 
