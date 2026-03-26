@@ -1,0 +1,1297 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pixel Art 3D (Lightweight)</title>
+    <style>
+      :root {
+        --bg: #0b0f14;
+        --panel: rgba(18, 24, 33, 0.76);
+        --panel-2: rgba(18, 24, 33, 0.58);
+        --text: #e8eef8;
+        --muted: rgba(232, 238, 248, 0.72);
+        --accent: #7ee787;
+        --danger: #ff6b6b;
+        --line: rgba(232, 238, 248, 0.16);
+        --shadow: 0 18px 60px rgba(0, 0, 0, 0.42);
+      }
+
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        background: radial-gradient(1200px 800px at 30% 20%, rgba(124, 58, 237, 0.22), transparent 55%),
+          radial-gradient(900px 700px at 75% 35%, rgba(34, 197, 94, 0.16), transparent 60%),
+          radial-gradient(1200px 1000px at 55% 90%, rgba(59, 130, 246, 0.12), transparent 55%),
+          var(--bg);
+        color: var(--text);
+        overflow: hidden;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial;
+      }
+
+      #app {
+        position: fixed;
+        inset: 0;
+      }
+
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        cursor: crosshair;
+      }
+
+      .hud {
+        position: fixed;
+        inset: 16px auto auto 16px;
+        display: grid;
+        gap: 12px;
+        width: min(250px, calc(100vw - 20px));
+        user-select: none;
+        pointer-events: none;
+      }
+
+      .panel {
+        pointer-events: auto;
+        background: linear-gradient(180deg, var(--panel), var(--panel-2));
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(10px);
+      }
+
+      .panel .title {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        padding: 12px 12px 0 12px;
+        gap: 10px;
+      }
+
+      .panel .title h1 {
+        margin: 0;
+        font-size: 14px;
+        letter-spacing: 0.2px;
+        font-weight: 700;
+      }
+
+      .panel .title .meta {
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .panel .body {
+        padding: 10px 12px 12px 12px;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.35;
+      }
+
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.04);
+      }
+
+      .pill kbd {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 11px;
+        padding: 2px 6px;
+        border-radius: 6px;
+        border: 1px solid rgba(232, 238, 248, 0.18);
+        background: rgba(0, 0, 0, 0.22);
+        color: var(--text);
+      }
+
+      .materials {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+        margin-top: 10px;
+      }
+
+      .structures {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+        margin-top: 10px;
+      }
+
+      .mat {
+        appearance: none;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.04);
+        border-radius: 12px;
+        padding: 8px 8px 10px 8px;
+        color: var(--text);
+        cursor: pointer;
+        display: grid;
+        gap: 8px;
+      }
+
+      .mat:focus {
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(126, 231, 135, 0.22);
+        border-color: rgba(126, 231, 135, 0.55);
+      }
+
+      .mat[aria-pressed="true"] {
+        border-color: rgba(126, 231, 135, 0.65);
+        background: rgba(126, 231, 135, 0.09);
+      }
+
+      .swatch {
+        height: 18px;
+        border-radius: 9px;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
+      }
+
+      .mat .name {
+        font-size: 12px;
+        font-weight: 650;
+        letter-spacing: 0.2px;
+      }
+
+      .section-label {
+        margin-top: 10px;
+        font-size: 11px;
+        letter-spacing: 0.3px;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 10px;
+      }
+
+      button.action {
+        appearance: none;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.04);
+        border-radius: 12px;
+        padding: 9px 10px;
+        color: var(--text);
+        cursor: pointer;
+        font-weight: 650;
+        letter-spacing: 0.2px;
+      }
+
+      button.action:hover {
+        background: rgba(255, 255, 255, 0.07);
+      }
+
+      button.action.danger {
+        border-color: rgba(255, 107, 107, 0.45);
+      }
+
+      #toast {
+        position: fixed;
+        inset: auto 16px 16px auto;
+        max-width: min(420px, calc(100vw - 32px));
+        padding: 10px 12px;
+        border-radius: 12px;
+        border: 1px solid var(--line);
+        background: rgba(18, 24, 33, 0.82);
+        color: var(--text);
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(10px);
+        transform: translateY(16px);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 180ms ease, transform 180ms ease;
+        font-size: 12px;
+        line-height: 1.35;
+      }
+
+      #toast.show {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      .corner {
+        position: fixed;
+        inset: 16px 16px auto auto;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        user-select: none;
+      }
+
+      .badge {
+        pointer-events: none;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: rgba(18, 24, 33, 0.62);
+        padding: 8px 10px;
+        color: var(--muted);
+        font-size: 12px;
+        backdrop-filter: blur(10px);
+      }
+
+      .badge b {
+        color: var(--text);
+      }
+
+      .badge .ok {
+        color: var(--accent);
+        font-weight: 750;
+      }
+
+      #customColorRow input[type="color"] {
+        width: 44px;
+        height: 34px;
+        padding: 0;
+        border: 1px solid rgba(232, 238, 248, 0.18);
+        background: rgba(255, 255, 255, 0.04);
+        border-radius: 12px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+
+    <div class="hud">
+      <div class="panel">
+        <div class="title">
+          <h1>Pixel Art 3D</h1>
+          <div class="meta" id="counts">0 blocks</div>
+        </div>
+        <div class="body">
+          <div class="row">
+            <span class="pill"><kbd>RMB</kbd> Place</span>
+            <span class="pill"><kbd>LMB</kbd> Remove</span>
+            <span class="pill"><kbd>Shift</kbd> Snap Layer</span>
+            <span class="pill"><kbd>E</kbd> Horizontal line build</span>
+            <span class="pill"><kbd>Q</kbd> Vertical line build</span>
+            <span class="pill"><kbd>1–5</kbd> Materials</span>
+            <span class="pill"><kbd>Ctrl + Z</kbd> Undo</span>
+          </div>
+
+          <div class="materials" id="materials"></div>
+          <div class="section-label">Custom Color</div>
+          <div class="row" id="customColorRow">
+            <input id="customColorInput" type="color" value="#000000" aria-label="Custom color" />
+            <span class="pill" id="customColorLabel">#000000</span>
+          </div>
+          <div class="section-label">Structure Presets</div>
+          <div class="structures" id="structures"></div>
+
+          <div class="buttons">
+            <button class="action" id="saveBtn" type="button">Save</button>
+            <button class="action" id="loadBtn" type="button">Load</button>
+            <button class="action danger" id="resetBtn" type="button">Reset</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="corner">
+      <div class="badge"><span class="ok">●</span> <b>Ready</b> <span id="hint">Right Click the ground to build.</span></div>
+    </div>
+
+    <div id="toast" role="status" aria-live="polite"></div>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://esm.sh/three@0.161.0",
+          "three/addons/": "https://esm.sh/three@0.161.0/examples/jsm/"
+        }
+      }
+    </script>
+
+    <script type="module">
+      import * as THREE from "three";
+      import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+      const app = document.getElementById("app");
+      const toastEl = document.getElementById("toast");
+      const countsEl = document.getElementById("counts");
+      const hintEl = document.getElementById("hint");
+      const matsEl = document.getElementById("materials");
+      const structuresEl = document.getElementById("structures");
+      const customColorInputEl = document.getElementById("customColorInput");
+      const customColorLabelEl = document.getElementById("customColorLabel");
+
+      function toast(msg) {
+        toastEl.textContent = msg;
+        toastEl.classList.add("show");
+        clearTimeout(toast._t);
+        toast._t = setTimeout(() => toastEl.classList.remove("show"), 1300);
+      }
+
+      const MATERIALS = [
+        {
+          id: "wood",
+          name: "Wood",
+          key: "1",
+          color: 0xb07a47,
+          roughness: 0.92,
+          metalness: 0.0,
+          emissive: 0x000000,
+          opacity: 1.0,
+          transparent: false
+        },
+        {
+          id: "brick",
+          name: "Brick",
+          key: "2",
+          color: 0xa63d2a,
+          roughness: 0.95,
+          metalness: 0.0,
+          emissive: 0x000000,
+          opacity: 1.0,
+          transparent: false
+        },
+        {
+          id: "concrete",
+          name: "Concrete",
+          key: "3",
+          color: 0x9aa0a6,
+          roughness: 1.0,
+          metalness: 0.0,
+          emissive: 0x000000,
+          opacity: 1.0,
+          transparent: false
+        },
+        {
+          id: "glass",
+          name: "Glass",
+          key: "4",
+          color: 0x6bdcff,
+          roughness: 0.08,
+          metalness: 0.0,
+          emissive: 0x0a1a22,
+          opacity: 0.35,
+          transparent: true
+        },
+        {
+          id: "custom",
+          name: "Custom",
+          key: "5",
+          color: 0x000000,
+          roughness: 0.25,
+          metalness: 0.0,
+          emissive: 0x000000,
+          opacity: 1.0,
+          transparent: false
+        }
+      ];
+
+      const STRUCTURES = [
+        {
+          id: "floor",
+          name: "Floor",
+          key: "f",
+          blocks: (() => {
+            const out = [];
+            for (let x = 0; x < 10; x++) for (let z = 0; z < 10; z++) out.push({ x, y: 0, z, matId: "wood" });
+            return out;
+          })()
+        },
+        {
+          id: "wall",
+          name: "Wall",
+          key: "w",
+          blocks: (() => {
+            const out = [];
+            for (let x = 0; x < 5; x++) for (let y = 0; y < 3; y++) out.push({ x, y, z: 0, matId: "wood" });
+            return out;
+          })()
+        }
+      ];
+
+      const materialById = new Map();
+      for (const m of MATERIALS) {
+        materialById.set(
+          m.id,
+          new THREE.MeshStandardMaterial({
+            color: m.color,
+            roughness: m.roughness,
+            metalness: m.metalness,
+            emissive: m.emissive,
+            opacity: m.opacity,
+            transparent: m.transparent
+          })
+        );
+      }
+
+      const CUSTOM_MAT_ID = "custom";
+
+      let currentMatId = "custom"; // Default material 
+      let currentStructureId = null;
+
+      function setStructure(id) {
+        currentStructureId = id;
+        for (const btn of structuresEl.querySelectorAll("button.mat")) {
+          btn.setAttribute("aria-pressed", btn.dataset.structure === currentStructureId ? "true" : "false");
+        }
+        if (!id) {
+          hintEl.textContent = "Single block mode.";
+          return;
+        }
+        const s = STRUCTURES.find((v) => v.id === id);
+        hintEl.textContent = `Structure: ${s?.name ?? id}. Click to place.`;
+      }
+
+      function setMaterial(id) {
+        if (!materialById.has(id)) return;
+        currentMatId = id;
+        if (currentStructureId) setStructure(null);
+        for (const btn of matsEl.querySelectorAll("button.mat")) {
+          btn.setAttribute("aria-pressed", btn.dataset.mat === currentMatId ? "true" : "false");
+        }
+        const mat = MATERIALS.find((m) => m.id === id);
+        hintEl.textContent = `Material: ${mat?.name ?? id}.`;
+        // Update the placement preview to match the selected material color.
+        const matObj = materialById.get(id);
+        if (matObj?.color && ghostMat) ghostMat.color.copy(matObj.color);
+      }
+
+      for (const m of MATERIALS) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "mat";
+        btn.dataset.mat = m.id;
+        btn.setAttribute("aria-pressed", m.id === currentMatId ? "true" : "false");
+        btn.title = m.key ? `Press ${m.key}` : `Select ${m.name}`;
+
+        const sw = document.createElement("div");
+        sw.className = "swatch";
+        sw.style.background = `linear-gradient(135deg, rgba(255,255,255,0.18), rgba(0,0,0,0.20)), #${m.color
+          .toString(16)
+          .padStart(6, "0")}`;
+        btn.appendChild(sw);
+
+        const nm = document.createElement("div");
+        nm.className = "name";
+        nm.textContent = m.name;
+        btn.appendChild(nm);
+
+        btn.addEventListener("click", () => setMaterial(m.id));
+        matsEl.appendChild(btn);
+      }
+
+      function setCustomMaterialColor(hexStr) {
+        if (!materialById.has(CUSTOM_MAT_ID)) return;
+        const hex = parseInt(hexStr.replace("#", ""), 16);
+        if (Number.isNaN(hex)) return;
+
+        // Freeze already-placed custom blocks so future color changes
+        // only affect the preview/next placements.
+        for (const mesh of blocks.values()) {
+          if (mesh?.userData?.matId === CUSTOM_MAT_ID && mesh.material?.clone) {
+            mesh.material = mesh.material.clone();
+          }
+        }
+
+        const mat = materialById.get(CUSTOM_MAT_ID);
+        mat.color.setHex(hex);
+        // Keep label in sync.
+        if (customColorLabelEl) customColorLabelEl.textContent = `#${hexStr.replace("#", "").toUpperCase()}`;
+      }
+
+      if (customColorInputEl) {
+        // Initialize picker from current custom material color.
+        if (materialById.has(CUSTOM_MAT_ID)) {
+          const hexStr = `#${materialById.get(CUSTOM_MAT_ID).color.getHexString().toUpperCase()}`;
+          customColorInputEl.value = hexStr;
+          if (customColorLabelEl) customColorLabelEl.textContent = hexStr;
+        }
+
+        customColorInputEl.addEventListener("input", (e) => {
+          const hexStr = e.target.value;
+          setCustomMaterialColor(hexStr);
+          setMaterial(CUSTOM_MAT_ID);
+        });
+      }
+
+      for (const s of STRUCTURES) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "mat";
+        btn.dataset.structure = s.id;
+        btn.setAttribute("aria-pressed", "false");
+        btn.title = `Press ${s.key.toUpperCase()}`;
+
+        const sw = document.createElement("div");
+        sw.className = "swatch";
+        sw.style.background =
+          "linear-gradient(135deg, rgba(255,255,255,0.22), rgba(0,0,0,0.22)), linear-gradient(90deg, #b07a47, #a66b3f)";
+        btn.appendChild(sw);
+
+        const nm = document.createElement("div");
+        nm.className = "name";
+        nm.textContent = `${s.name} (${s.key.toUpperCase()})`;
+        btn.appendChild(nm);
+
+        btn.addEventListener("click", () => setStructure(s.id));
+        structuresEl.appendChild(btn);
+      }
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      app.appendChild(renderer.domElement);
+
+      const scene = new THREE.Scene();
+      scene.fog = new THREE.FogExp2(0x0b0f14, 0.022);
+
+      const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 500);
+      camera.position.set(12, 12, 16);
+
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.08;
+      controls.target.set(0, 1, 0);
+      // Let RMB be used for placing blocks (not for camera rotation).
+      controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.NONE };
+      // Used to keep fog from getting overly strong as you zoom out.
+      // (Directional/hemisphere lights don't attenuate with distance, so fog is what makes lighting feel like it fades.)
+      const initialCameraDistance = camera.position.distanceTo(controls.target);
+      controls.maxDistance = 120;
+      controls.minDistance = 4;
+      controls.maxPolarAngle = Math.PI * 0.49;
+
+      // WASD camera movement to avoid rotating with the mouse (which can accidentally place blocks).
+      const moveState = { w: false, a: false, s: false, d: false, up: false, down: false };
+      const tmpForward = new THREE.Vector3();
+      const tmpRight = new THREE.Vector3();
+      const tmpUp = new THREE.Vector3(0, 1, 0);
+      const tmpDir = new THREE.Vector3();
+      const moveSpeed = 10; // world units per second (tuned for this scene)
+
+      // Hold-to-place state (RMB).
+      // We batch all placements during the hold into a single undo step when you release RMB.
+      const placeHold = {
+        down: false,
+        before: null,
+        changed: false,
+        totalPlaced: 0,
+        lastTargetKey: null,
+        lastAttemptFailed: false,
+        nextAttemptAt: 0
+      };
+      const PLACE_INTERVAL_MS = 55;
+
+      const hemi = new THREE.HemisphereLight(0x9db4ff, 0x29364a, 0.85);
+      scene.add(hemi);
+
+      const sun = new THREE.DirectionalLight(0xffffff, 5);
+      sun.position.set(18, 28, 10);
+      sun.castShadow = true;
+      sun.shadow.mapSize.set(2048, 2048);
+      sun.shadow.camera.near = 2;
+      sun.shadow.camera.far = 120;
+      sun.shadow.camera.left = -45;
+      sun.shadow.camera.right = 45;
+      sun.shadow.camera.top = 45;
+      sun.shadow.camera.bottom = -45;
+      scene.add(sun);
+
+      const groundSize = 50;
+      const groundGeo = new THREE.PlaneGeometry(groundSize, groundSize);
+      const groundMat = new THREE.MeshStandardMaterial({ color: 0x0f1621, roughness: 1.0, metalness: 0.0 });
+      const ground = new THREE.Mesh(groundGeo, groundMat);
+      ground.rotation.x = -Math.PI / 2;
+      ground.receiveShadow = true;
+      ground.name = "ground";
+      scene.add(ground);
+
+      const grid = new THREE.GridHelper(groundSize, groundSize, 0x294064, 0x192536);
+      grid.material.opacity = 0.55;
+      grid.material.transparent = true;
+      grid.position.y = 0.001;
+      scene.add(grid);
+
+      const blockGeo = new THREE.BoxGeometry(1, 1, 1);
+      const blocks = new Map();
+      const blockGroup = new THREE.Group();
+      scene.add(blockGroup);
+
+      function keyFromPos(x, y, z) {
+        return `${x},${y},${z}`;
+      }
+
+      function updateCounts() {
+        countsEl.textContent = `${blocks.size} block${blocks.size === 1 ? "" : "s"}`;
+      }
+
+      const ghostMat = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        roughness: 0.2,
+        metalness: 0.0,
+        transparent: true,
+        opacity: 0.18,
+        emissive: 0x203040
+      });
+      const ghost = new THREE.Mesh(blockGeo, ghostMat);
+      ghost.castShadow = false;
+      ghost.receiveShadow = false;
+      ghost.visible = false;
+      scene.add(ghost);
+
+      const edgeMat = new THREE.LineBasicMaterial({ color: 0x7ee787, transparent: true, opacity: 0.55 });
+      const edgeGeo = new THREE.EdgesGeometry(blockGeo);
+      const ghostEdges = new THREE.LineSegments(edgeGeo, edgeMat);
+      ghost.add(ghostEdges);
+
+      const linePreviewGroup = new THREE.Group();
+      scene.add(linePreviewGroup);
+      const linePreviewMat = new THREE.MeshStandardMaterial({
+        color: 0x7ee787,
+        roughness: 0.25,
+        metalness: 0.0,
+        transparent: true,
+        opacity: 0.28,
+        emissive: 0x103018
+      });
+
+      //init global variables
+      let lineMode = false;
+      let lineStart = null;
+      let lineEnd = null;
+      let lastPlaceTarget = null;
+      let lastRemoveTarget = null;
+      let verticalMode = false;
+      let ghostHeight = 0;
+
+      const undoStack = [];
+      const MAX_UNDO_STEPS = 120;
+
+      function clearLinePreview() {
+        while (linePreviewGroup.children.length > 0) {
+          linePreviewGroup.remove(linePreviewGroup.children[0]);
+        }
+      }
+
+      function serializeBlocks() {
+        const data = [];
+        for (const mesh of blocks.values()) {
+          const { x, y, z } = mesh.userData.grid;
+          data.push({ x, y, z, matId: mesh.userData.matId });
+        }
+        return data;
+      }
+
+      function restoreBlocksFromData(data) {
+        clearAll();
+        for (const b of data) addBlock(b.x | 0, b.y | 0, b.z | 0, b.matId);
+      }
+
+      function recordUndoSnapshot(previousState) {
+        undoStack.push(previousState);
+        if (undoStack.length > MAX_UNDO_STEPS) undoStack.shift();
+      }
+
+      function runWithUndo(action) {
+        const before = serializeBlocks();
+        action();
+        const after = serializeBlocks();
+        if (JSON.stringify(before) === JSON.stringify(after)) return false;
+        recordUndoSnapshot(before);
+        return true;
+      }
+
+      function undoLastAction() {
+        if (!undoStack.length) {
+          toast("Nothing to undo.");
+          return;
+        }
+        const prev = undoStack.pop();
+        restoreBlocksFromData(prev);
+        stopLineMode();
+        hintEl.textContent = "Click the ground to build.";
+        toast("Undid previous step.");
+      }
+      
+      function getLinePositions(a, b, vertical) {
+        let dx = b.x - a.x;
+        let dy = b.y - a.y;
+        let dz = b.z - a.z;
+        if (vertical){
+          dx=0;
+          dz=0;
+        }
+
+        const steps = Math.max(Math.abs(dx), Math.abs(dy), Math.abs(dz));
+        if (steps === 0) return [{ x: a.x, y: a.y, z: a.z }];
+        const out = [];
+        const seen = new Set();
+        for (let i = 0; i <= steps; i++) {
+          const t = i / steps;
+          const x = Math.round(a.x + dx * t);
+          const y = Math.round(a.y + dy * t);
+          const z = Math.round(a.z + dz * t);
+          const key = keyFromPos(x, y, z);
+          if (seen.has(key)) continue;
+          seen.add(key);
+          out.push({ x, y, z });
+        }
+        return out;
+      }
+
+      function updateLinePreview(vertical) {
+        clearLinePreview();
+        if (!lineMode || !lineStart || !lineEnd) return;
+        const cells = getLinePositions(lineStart, lineEnd,vertical);
+        for (const c of cells) {
+          const m = new THREE.Mesh(blockGeo, linePreviewMat);
+          m.position.set(c.x + 0.5, c.y + 0.5, c.z + 0.5);
+          m.castShadow = false;
+          m.receiveShadow = false;
+          linePreviewGroup.add(m);
+        }
+      }
+
+      function stopLineMode() {
+        lineMode = false;
+        lineStart = null;
+        lineEnd = null;
+        clearLinePreview();
+      }
+
+      function addBlock(x, y, z, matId) {
+        if (y < 0) return false;
+        const key = keyFromPos(x, y, z);
+        if (blocks.has(key)) return false;
+        const mat = materialById.get(matId) ?? materialById.get(MATERIALS[0].id);
+        // Freeze custom color at placement time by cloning the material.
+        // Otherwise, updating the custom color picker would recolor existing blocks.
+        const meshMat = matId === CUSTOM_MAT_ID && mat?.clone ? mat.clone() : mat;
+        const mesh = new THREE.Mesh(blockGeo, meshMat);
+        mesh.position.set(x + 0.5, y + 0.5, z + 0.5);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        mesh.userData = { grid: { x, y, z }, matId };
+        blockGroup.add(mesh);
+        blocks.set(key, mesh);
+        updateCounts();
+        return true;
+      }
+
+      function placeStructureAt(baseX, baseY, baseZ, structureId) {
+        const structure = STRUCTURES.find((s) => s.id === structureId);
+        if (!structure) return 0;
+        let placed = 0;
+        for (const b of structure.blocks) {
+          if (addBlock(baseX + b.x, baseY + b.y, baseZ + b.z, currentMatId)) placed++;
+        }
+        return placed;
+      }
+
+      function removeBlockAt(x, y, z) {
+        const key = keyFromPos(x, y, z);
+        const mesh = blocks.get(key);
+        if (!mesh) return false;
+        mesh.geometry = null;
+        blockGroup.remove(mesh);
+        blocks.delete(key);
+        updateCounts();
+        return true;
+      }
+
+      function clearAll() {
+        for (const mesh of blocks.values()) {
+          mesh.geometry = null;
+          blockGroup.remove(mesh);
+        }
+        blocks.clear();
+        updateCounts();
+      }
+      function initConcrete(){
+          for (let x = -50; x <= 50; x++) for (let z = -50; z <= 50; z++) addBlock(x, 0, z, "concrete");
+      }
+      initConcrete();
+
+      const raycaster = new THREE.Raycaster();
+      const mouse = new THREE.Vector2();
+      let shiftDown = false;
+
+      function setMouseFromEvent(e) {
+        const rect = renderer.domElement.getBoundingClientRect();
+        mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
+      }
+
+      function getGridFromPoint(p) {
+        return { x: Math.floor(p.x), y: Math.floor(p.y), z: Math.floor(p.z) };
+      }
+      
+      function updateGhost(e) {
+        setMouseFromEvent(e);
+        raycaster.setFromCamera(mouse, camera);
+        const hits = raycaster.intersectObjects([ground, ...blockGroup.children], false);
+
+        if (!hits.length) {
+          ghost.visible = false;
+          lastPlaceTarget = null;
+          if (lineMode) {
+            lineEnd = null;
+            updateLinePreview(verticalMode);
+          }
+          return null;
+        }
+
+        const hit = hits[0];
+        if (!hit.face) {
+          ghost.visible = false;
+          lastPlaceTarget = null;
+          if (lineMode) {
+            lineEnd = null;
+            updateLinePreview(verticalMode);
+          }
+          return null;
+        }
+
+        // Ground placement
+        if (hit.object === ground) {
+          const g = getGridFromPoint(hit.point);
+          const y = verticalMode ? ghostHeight : 0;
+
+          ghost.position.set(g.x + 0.5, y + 0.5, g.z + 0.5);
+          ghost.visible = true;
+
+          const target = { mode: "place", x: g.x, y, z: g.z, on: "ground" };
+          lastPlaceTarget = target;
+
+          if (lineMode && lineStart) {
+            lineEnd = verticalMode
+              ? { x: lineStart.x, y: target.y, z: lineStart.z }
+              : { x: target.x, y: target.y, z: target.z };
+            updateLinePreview(verticalMode);
+          }
+          return target;
+        }
+
+        // Block placement (unchanged)
+        const n = hit.face.normal.clone();
+        n.transformDirection(hit.object.matrixWorld);
+        const pos = hit.object.position.clone();
+        const gx = Math.floor(pos.x);
+        const gy = Math.floor(pos.y);
+        const gz = Math.floor(pos.z);
+
+        let nx = Math.round(n.x);
+        let ny = Math.round(n.y);
+        let nz = Math.round(n.z);
+
+        if (Math.abs(nx) + Math.abs(ny) + Math.abs(nz) !== 1) {
+          const ax = Math.abs(n.x);
+          const ay = Math.abs(n.y);
+          const az = Math.abs(n.z);
+          if (ax >= ay && ax >= az) nx = Math.sign(n.x), ny = 0, nz = 0;
+          else if (ay >= ax && ay >= az) ny = Math.sign(n.y), nx = 0, nz = 0;
+          else nz = Math.sign(n.z), nx = 0, ny = 0;
+        }
+
+        const targetX = gx + nx;
+        const targetY = gy + ny;
+        const targetZ = gz + nz;
+
+        ghost.position.set(targetX + 0.5, targetY + 0.5, targetZ + 0.5);
+        ghost.visible = true;
+
+        const target = { mode: "place", x: targetX, y: targetY, z: targetZ, on: "block" };
+        lastPlaceTarget = target;
+
+        if (lineMode && lineStart) {
+          lineEnd = verticalMode
+            ? { x: lineStart.x, y: target.y, z: lineStart.z }
+            : { x: target.x, y: target.y, z: target.z };
+          updateLinePreview(verticalMode);
+        }
+        return target;
+      }
+
+      function updateRemoveTarget(e) {
+        setMouseFromEvent(e);
+        raycaster.setFromCamera(mouse, camera);
+        const hits = raycaster.intersectObjects(blockGroup.children, false);
+        if (!hits.length) return null;
+        const hit = hits[0];
+        const pos = hit.object.position;
+        return { x: Math.floor(pos.x), y: Math.floor(pos.y), z: Math.floor(pos.z) };
+      }
+
+      function saveToLocal() {
+        const data = serializeBlocks();
+        localStorage.setItem("house-builder-3d:v1", JSON.stringify({ blocks: data }));
+        toast("Saved.");
+      }
+
+      function loadFromLocal() {
+        const raw = localStorage.getItem("house-builder-3d:v1");
+        if (!raw) {
+          toast("No save found.");
+          return;
+        }
+        let parsed;
+        try {
+          parsed = JSON.parse(raw);
+        } catch {
+          toast("Save data is corrupted.");
+          return;
+        }
+        if (!parsed?.blocks || !Array.isArray(parsed.blocks)) {
+          toast("Save data is invalid.");
+          return;
+        }
+        runWithUndo(() => {
+          clearAll();
+          for (const b of parsed.blocks) addBlock(b.x | 0, b.y | 0, b.z | 0, b.matId);
+        });
+        toast("Loaded.");
+      }
+
+      function resetAll() {
+        runWithUndo(() => {
+          clearAll();
+          initConcrete();
+        });
+        toast("Reset.");
+      }
+
+      document.getElementById("saveBtn").addEventListener("click", saveToLocal);
+      document.getElementById("loadBtn").addEventListener("click", loadFromLocal);
+      document.getElementById("resetBtn").addEventListener("click", resetAll);
+
+      window.addEventListener("contextmenu", (e) => e.preventDefault());
+      
+      //Mouse wheel to control Vertical block height (ghost)
+      window.addEventListener("keydown", (e) => {
+        if (verticalMode) {
+          if (e.key.toLowerCase() === "v") {
+            ghostHeight++;
+          }
+          if (e.key.toLowerCase() === "b") {
+            if (ghostHeight>0){
+              ghostHeight--;
+            }
+          }
+        }
+      });
+
+      renderer.domElement.addEventListener("pointermove", (e) => {
+        updateGhost(e,verticalMode);
+        lastRemoveTarget = updateRemoveTarget(e);
+      });
+
+      function targetKey(t) {
+        if (!t) return null;
+        return `${t.on}:${t.x},${t.y},${t.z}`;
+      }
+
+      // Attempts to place at a given target.
+      // Returns the number of blocks placed (0 means occupied / no-op).
+      function tryPlaceAtTarget(target) {
+        if (!target || lineMode) return 0;
+
+        const key = targetKey(target);
+        if (placeHold.lastTargetKey !== key) {
+          placeHold.lastTargetKey = key;
+          placeHold.lastAttemptFailed = false;
+        }
+
+        // If we already tried this exact cell and failed (occupied), don't spam retries.
+        if (placeHold.lastAttemptFailed) return 0;
+
+        let placed = 0;
+        if (currentStructureId) {
+          placed = placeStructureAt(target.x, target.y, target.z, currentStructureId);
+        } else {
+          placed = addBlock(target.x, target.y, target.z, currentMatId) ? 1 : 0;
+        }
+
+        if (placed > 0) {
+          placeHold.changed = true;
+          placeHold.totalPlaced += placed;
+          placeHold.lastAttemptFailed = false;
+          return placed;
+        }
+
+        placeHold.lastAttemptFailed = true;
+        return 0;
+      }
+
+      renderer.domElement.addEventListener("pointerdown", (e) => {
+        if (e.button ===  0) {
+          const t = lastRemoveTarget;
+          if (!t) return;
+          let ok = false;
+          runWithUndo(() => {
+            ok = removeBlockAt(t.x, t.y, t.z);
+          });
+          if (!ok) toast("Nothing to remove.");
+        }
+        if (e.button === 2) {
+          // Right-click placing (press & hold).
+          e.preventDefault();
+          if (lineMode) return;
+
+          placeHold.down = true;
+          placeHold.before = serializeBlocks();
+          placeHold.changed = false;
+          placeHold.totalPlaced = 0;
+          placeHold.lastTargetKey = null;
+          placeHold.lastAttemptFailed = false;
+          placeHold.nextAttemptAt = 0; // attempt immediately
+
+          const target = updateGhost(e,verticalMode);
+          if (!target) return;
+
+          const placedNow = tryPlaceAtTarget(target);
+          // Keep original click behavior for the first attempt only.
+          if (currentStructureId) {
+            if (placedNow === 0) toast("Structure space is occupied.");
+            else toast(`Placed ${placedNow} blocks (${currentStructureId}).`);
+          } else {
+            if (placedNow === 0) toast("That space is occupied.");
+          }
+        } 
+      });
+
+      window.addEventListener("pointerup", (e) => {
+        if (e.button !== 2) return;
+        if (!placeHold.down) return;
+
+        placeHold.down = false;
+        const shouldCommit = placeHold.changed && placeHold.before;
+
+        // Commit exactly one undo step for everything done during the hold.
+        if (shouldCommit) recordUndoSnapshot(placeHold.before);
+
+        // Optional summary toast only for structure holds.
+        if (shouldCommit && currentStructureId && placeHold.totalPlaced > 0) {
+          toast(`Placed ${placeHold.totalPlaced} blocks (${currentStructureId}).`);
+        }
+
+        // Reset
+        placeHold.before = null;
+        placeHold.changed = false;
+        placeHold.totalPlaced = 0;
+        placeHold.lastTargetKey = null;
+        placeHold.lastAttemptFailed = false;
+        placeHold.nextAttemptAt = 0;
+      });
+
+      window.addEventListener("blur", () => {
+        if (!placeHold.down) return;
+        // Stop placing when the tab loses focus (don't commit if nothing changed).
+        placeHold.down = false;
+        if (placeHold.changed && placeHold.before) recordUndoSnapshot(placeHold.before);
+        placeHold.before = null;
+        placeHold.changed = false;
+        placeHold.totalPlaced = 0;
+        placeHold.lastTargetKey = null;
+        placeHold.lastAttemptFailed = false;
+        placeHold.nextAttemptAt = 0;
+      });
+
+      window.addEventListener("keydown", (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+          e.preventDefault();
+          undoLastAction();
+          return;
+        }
+        if (e.key === "Shift") shiftDown = true;
+
+        // Camera movement (W/A/S/D). Keep Shift+W as the "Wall" shortcut.
+        const k = e.key.toLowerCase();
+        if ((k === "w" || k === "a" || k === "s" || k === "d") && !(k === "w" && e.shiftKey)) {
+          e.preventDefault();
+          if (k === "w") moveState.w = true;
+          if (k === "a") moveState.a = true;
+          if (k === "s") moveState.s = true;
+          if (k === "d") moveState.d = true;
+          return;
+        }
+
+        const idx = MATERIALS.findIndex((m) => m.key === e.key);
+        if (idx !== -1) setMaterial(MATERIALS[idx].id);
+        const structureIdx = STRUCTURES.findIndex((s) => s.key === e.key.toLowerCase());
+        if (structureIdx !== -1) {
+          setStructure(STRUCTURES[structureIdx].id);
+          toast(`Selected ${STRUCTURES[structureIdx].name}.`);
+          return;
+        }
+        
+        if (e.key.toLowerCase() === "e") {
+          verticalMode = false;
+          e.preventDefault();
+          if (!lineMode) {
+            if (!lastPlaceTarget) {
+              toast("Hover a target cell first.");
+              return;
+            }
+            lineMode = true;
+            lineStart = { x: lastPlaceTarget.x, y: lastPlaceTarget.y, z: lastPlaceTarget.z };
+            lineEnd = { ...lineStart };
+            updateLinePreview(verticalMode);
+            hintEl.textContent = "Line mode: move cursor to set end, press E again to confirm.";
+            return;
+          }
+
+          if (!lineStart || !lineEnd) {
+            toast("Move the cursor to select a line.");
+            return;
+          }
+
+          const cells = getLinePositions(lineStart, lineEnd, verticalMode);
+          let placed = 0;
+          runWithUndo(() => {
+            for (const c of cells) if (addBlock(c.x, c.y, c.z, currentMatId)) placed++;
+          });
+          stopLineMode();
+          if (placed === 0) toast("No blocks placed (line already occupied).");
+          else toast(`Placed ${placed} block${placed === 1 ? "" : "s"} in a line.`);
+          hintEl.textContent = "Right Click the ground to build.";
+          return;
+        }
+        
+        if (e.key.toLowerCase() === "q") {
+          verticalMode = true;
+          e.preventDefault();
+
+            if (!lineMode) {
+              if (!lastPlaceTarget) {
+                toast("Hover a target cell first.");
+                return;
+              }
+              lineMode = true;
+              // Start point includes y-axis
+              lineStart = { x: lastPlaceTarget.x, y: ghostHeight, z: lastPlaceTarget.z };
+              lineEnd = { ...lineStart };
+              updateLinePreview(verticalMode);
+              hintEl.textContent = "Vertical line mode: press E again to confirm.\nPress V to increase height \nPress B to decrease height \nCurrent Height: " + ghostHeight;
+              hintEl.style.whiteSpace = "pre-line"; 
+              return;
+            }
+
+            if (!lineStart || !lineEnd) {
+              toast("Move the cursor to select a vertical line.");
+              return;
+            }
+
+            // Instead of getLinePositions on x/z, make sure it calculates along y
+            const cells = getLinePositions(lineStart, lineEnd, true); // pass axis if your helper supports it
+            let placed = 0;
+            runWithUndo(() => {
+              for (const c of cells) {
+                if (addBlock(c.x, c.y, c.z, currentMatId)) placed++;
+              }
+            });
+            stopLineMode();
+            if (placed === 0) toast("No blocks placed (line already occupied).");
+            else toast(`Placed ${placed} block${placed === 1 ? "" : "s"} in a vertical line.`);
+            hintEl.textContent = "Click the ground to build.";
+            return;
+        }
+
+        if (e.key === "Escape" && lineMode) {
+          stopLineMode();
+          hintEl.textContent = "Click the ground to build.";
+          toast("Line mode cancelled.");
+          return;
+        }
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+          e.preventDefault();
+          saveToLocal();
+        }
+        if (e.key.toLowerCase() === "l") loadFromLocal();
+        if (e.key.toLowerCase() === "r") resetAll();
+      });
+
+      window.addEventListener("keyup", (e) => {
+        if (e.key === "Shift") shiftDown = false;
+        const k = e.key.toLowerCase();
+        if (k === "w") moveState.w = false;
+        if (k === "a") moveState.a = false;
+        if (k === "s") moveState.s = false;
+        if (k === "d") moveState.d = false;
+      });
+
+      function onResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      }
+      window.addEventListener("resize", onResize);
+
+      let t0 = performance.now();
+      function tick() {
+        const t1 = performance.now();
+        const dt = Math.min(0.05, (t1 - t0) / 1000);
+        t0 = t1;
+
+        // Apply WASD movement by translating the camera and the OrbitControls target together.
+        if (moveState.w || moveState.a || moveState.s || moveState.d) {
+          camera.getWorldDirection(tmpForward);
+          // Flatten movement to the XZ plane.
+          tmpForward.y = 0;
+          if (tmpForward.lengthSq() > 1e-8) tmpForward.normalize();
+          // Right = Up x Forward (for a consistent "A/D" strafe).
+          tmpRight.crossVectors(tmpUp, tmpForward).normalize();
+
+          tmpDir.set(0, 0, 0);
+          if (moveState.w) tmpDir.add(tmpForward);
+          if (moveState.s) tmpDir.sub(tmpForward);
+          if (moveState.d) tmpDir.sub(tmpRight);
+          if (moveState.a) tmpDir.add(tmpRight);
+          if (moveState.up) tmpDir.y += 1;
+          if (moveState.down) tmpDir.y -= 1;
+          if (tmpDir.lengthSq() > 1e-8) tmpDir.normalize();
+
+          const offset = tmpDir.multiplyScalar(moveSpeed * dt);
+          camera.position.add(offset);
+          controls.target.add(offset);
+        }
+
+        controls.update();
+
+        // If RMB is held, keep placing repeatedly at a controlled rate.
+        if (placeHold.down && !lineMode && t1 >= placeHold.nextAttemptAt) {
+          placeHold.nextAttemptAt = t1 + PLACE_INTERVAL_MS;
+          tryPlaceAtTarget(lastPlaceTarget);
+        }
+
+        sun.position.x = 18 + Math.sin(t1 * 0.00015) * 6;
+        sun.position.z = 10 + Math.cos(t1 * 0.00015) * 6;
+
+        const w = (Math.sin(t1 * 0.0008) * 0.5 + 0.5) * 0.35;
+        const dist = camera.position.distanceTo(controls.target);
+        // Only reduce fog density when zoomed out, never increase it when zoomed in.
+        const zoomFogScale = Math.min(1, initialCameraDistance / Math.max(dist, 0.001));
+        scene.fog.density = (0.02 + w * 0.01) * zoomFogScale;
+
+        // ghost.rotation.y += dt * 0.3;
+        renderer.render(scene, camera);
+        requestAnimationFrame(tick);
+      }
+
+      updateCounts();
+      setMaterial(currentMatId);
+      toast("Tip: RMB place blocks. F/T/H choose structures. Shift+W = Wall. WASD moves camera. Q/Z = up/down. E line-builds. Custom color uses the color picker. Ctrl+S saves.");
+      tick();
+    </script>
+  </body>
+</html>
