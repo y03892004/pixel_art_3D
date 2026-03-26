@@ -1036,7 +1036,7 @@
       renderer.domElement.addEventListener("pointerdown", (e) => {
         if (e.button ===  0) {
           const t = lastRemoveTarget;
-          if (!t) return;
+          if (!t || t.y<=0) return;
           let ok = false;
           runWithUndo(() => {
             ok = removeBlockAt(t.x, t.y, t.z);
