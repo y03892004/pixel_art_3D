@@ -451,20 +451,6 @@
         hintEl.textContent = `Structure: ${s?.name ?? id}. Click to place.`;
       }
 
-      function setMaterial(id) {
-        if (!materialById.has(id)) return;
-        currentMatId = id;
-        if (currentStructureId) setStructure(null);
-        for (const btn of matsEl.querySelectorAll("button.mat")) {
-          btn.setAttribute("aria-pressed", btn.dataset.mat === currentMatId ? "true" : "false");
-        }
-        const mat = MATERIALS.find((m) => m.id === id);
-        hintEl.textContent = `Material: ${mat?.name ?? id}.`;
-        // Update the placement preview to match the selected material color.
-        const matObj = materialById.get(id);
-        if (matObj?.color && ghostMat) ghostMat.color.copy(matObj.color);
-      }
-
       for (const m of MATERIALS) {
         const btn = document.createElement("button");
         btn.type = "button";
@@ -487,6 +473,44 @@
 
         btn.addEventListener("click", () => setMaterial(m.id));
         matsEl.appendChild(btn);
+      }
+
+      for (const s of STRUCTURES) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "mat";
+        btn.dataset.structure = s.id;
+        btn.setAttribute("aria-pressed", "false");
+        btn.title = `Press ${s.key.toUpperCase()}`;
+
+        const sw = document.createElement("div");
+        sw.className = "swatch";
+        sw.style.background =
+          "linear-gradient(135deg, rgba(255,255,255,0.22), rgba(0,0,0,0.22)), linear-gradient(90deg, #b07a47, #a66b3f)";
+        btn.appendChild(sw);
+
+        const nm = document.createElement("div");
+        nm.className = "name";
+        nm.textContent = `${s.name} (${s.key.toUpperCase()})`;
+        btn.appendChild(nm);
+
+        btn.addEventListener("click", () => setStructure(s.id));
+        structuresEl.appendChild(btn);
+      }
+
+      function setMaterial(id) {
+        if (!materialById.has(id)) return;
+        currentMatId = id;
+        if (currentStructureId) setStructure(null);
+        for (const btn of matsEl.querySelectorAll("button.mat")) {
+          btn.setAttribute("aria-pressed", btn.dataset.mat === currentMatId ? "true" : "false");
+        }
+        const mat = MATERIALS.find((m) => m.id === id);
+        hintEl.textContent = `Material: ${mat?.name ?? id}.`;
+        // Update the placement preview to match the selected material color.
+        const matObj = materialById.get(id);
+        if (matObj?.color && ghostMat) ghostMat.color.copy(matObj.color);
+        updateStructureSwatches(id);
       }
 
       function setCustomMaterialColor(hexStr) {
@@ -518,32 +542,32 @@
 
         customColorInputEl.addEventListener("input", (e) => {
           const hexStr = e.target.value;
+          MATERIALS[4].color = new THREE.MeshStandardMaterial(parseInt(hexStr.replace("#", "").toUpperCase(), 16));
+          // Find the swatch for MATERIALS[4] and update it
+          const swatchEl = matsEl.querySelector(`button[data-mat="${MATERIALS[4].id}"] .swatch`);
+          const floorSwatch = structuresEl.querySelector(`button[data-structure="floor"] .swatch`);
+          const wallSwatch = structuresEl.querySelector(`button[data-structure="wall"] .swatch`);
+          if (swatchEl) {
+            swatchEl.style.background = `linear-gradient(135deg, rgba(255,255,255,0.18), rgba(0,0,0,0.20)), ${hexStr}`;
+            floorSwatch.style.background = `linear-gradient(135deg, rgba(255,255,255,0.18), rgba(0,0,0,0.20)), ${hexStr}`;
+            wallSwatch.style.background = `linear-gradient(135deg, rgba(255,255,255,0.18), rgba(0,0,0,0.20)), ${hexStr}`;
+          }
           setCustomMaterialColor(hexStr);
           setMaterial(CUSTOM_MAT_ID);
         });
       }
 
-      for (const s of STRUCTURES) {
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "mat";
-        btn.dataset.structure = s.id;
-        btn.setAttribute("aria-pressed", "false");
-        btn.title = `Press ${s.key.toUpperCase()}`;
-
-        const sw = document.createElement("div");
-        sw.className = "swatch";
-        sw.style.background =
-          "linear-gradient(135deg, rgba(255,255,255,0.22), rgba(0,0,0,0.22)), linear-gradient(90deg, #b07a47, #a66b3f)";
-        btn.appendChild(sw);
-
-        const nm = document.createElement("div");
-        nm.className = "name";
-        nm.textContent = `${s.name} (${s.key.toUpperCase()})`;
-        btn.appendChild(nm);
-
-        btn.addEventListener("click", () => setStructure(s.id));
-        structuresEl.appendChild(btn);
+      function updateStructureSwatches(matId) {
+        const mat = MATERIALS.find(m => m.id === matId);
+        if (!mat) {
+          console.warn("No material found for id:", matId);
+          return;
+        }         
+        const floorSwatch = structuresEl.querySelector(`button[data-structure="floor"] .swatch`);
+        const wallSwatch = structuresEl.querySelector(`button[data-structure="wall"] .swatch`);
+        const hexStr = `#${mat.color.toString(16).padStart(6, "0")}`;
+        floorSwatch.style.background = `linear-gradient(135deg, rgba(255,255,255,0.18), rgba(0,0,0,0.20)), ${hexStr}`;
+        wallSwatch.style.background = `linear-gradient(135deg, rgba(255,255,255,0.18), rgba(0,0,0,0.20)), ${hexStr}`;
       }
 
       const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -770,7 +794,7 @@
         clearLinePreview();
       }
 
-      function addBlock(x, y, z, matId) {
+      function addBlock(x, y, z, matId, color) {
         if (y < 0) return false;
         const key = keyFromPos(x, y, z);
         if (blocks.has(key)) return false;
@@ -778,6 +802,9 @@
         // Freeze custom color at placement time by cloning the material.
         // Otherwise, updating the custom color picker would recolor existing blocks.
         const meshMat = matId === CUSTOM_MAT_ID && mat?.clone ? mat.clone() : mat;
+        if (color !== undefined && meshMat.color) {
+          meshMat.color.set(color); // accepts "#FF0000" or 0xff0000
+        }
         const mesh = new THREE.Mesh(blockGeo, meshMat);
         mesh.position.set(x + 0.5, y + 0.5, z + 0.5);
         mesh.castShadow = true;
@@ -934,31 +961,29 @@
       }
 
       function saveToLocal() {
-        const data = serializeBlocks();
-        localStorage.setItem("house-builder-3d:v1", JSON.stringify({ blocks: data }));
+        const data = [];
+        for (const [key, mesh] of blocks) {
+          const { x, y, z } = mesh.userData.grid;
+          const matId = mesh.userData.matId;
+          const color = mesh.material.color.getHex(); // capture actual color
+          data.push({ x, y, z, matId, color });
+        }
+        localStorage.setItem("pixel-art-3d:v1", JSON.stringify({ blocks: data }));
         toast("Saved.");
       }
 
       function loadFromLocal() {
-        const raw = localStorage.getItem("house-builder-3d:v1");
-        if (!raw) {
-          toast("No save found.");
-          return;
-        }
+        const raw = localStorage.getItem("pixel-art-3d:v1");
+        if (!raw) { toast("No save found."); return; }
         let parsed;
-        try {
-          parsed = JSON.parse(raw);
-        } catch {
-          toast("Save data is corrupted.");
-          return;
-        }
-        if (!parsed?.blocks || !Array.isArray(parsed.blocks)) {
-          toast("Save data is invalid.");
-          return;
-        }
+        try { parsed = JSON.parse(raw); } catch { toast("Save data is corrupted."); return; }
+        if (!parsed?.blocks || !Array.isArray(parsed.blocks)) { toast("Save data is invalid."); return; }
+
         runWithUndo(() => {
           clearAll();
-          for (const b of parsed.blocks) addBlock(b.x | 0, b.y | 0, b.z | 0, b.matId);
+          for (const b of parsed.blocks) {
+            addBlock(b.x | 0, b.y | 0, b.z | 0, b.matId, b.color); // <-- pass color too
+          }
         });
         toast("Loaded.");
       }
