@@ -321,78 +321,64 @@
       import * as THREE from "three";
       import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
-      const app = document.getElementById("app");
-      const toastEl = document.getElementById("toast");
-      const countsEl = document.getElementById("counts");
-      const hintEl = document.getElementById("hint");
-      const matsEl = document.getElementById("materials");
-      const structuresEl = document.getElementById("structures");
-      const customColorInputEl = document.getElementById("customColorInput");
-      const customColorLabelEl = document.getElementById("customColorLabel");
+      // ---------------------------------------------------------------------------
+      // DOM + tiny utilities
+      // ---------------------------------------------------------------------------
+      const els = {
+        app: document.getElementById("app"),
+        toast: document.getElementById("toast"),
+        counts: document.getElementById("counts"),
+        hint: document.getElementById("hint"),
+        materials: document.getElementById("materials"),
+        structures: document.getElementById("structures"),
+        customColorInput: document.getElementById("customColorInput"),
+        customColorLabel: document.getElementById("customColorLabel")
+      };
 
       function toast(msg) {
-        toastEl.textContent = msg;
-        toastEl.classList.add("show");
+        els.toast.textContent = msg;
+        els.toast.classList.add("show");
         clearTimeout(toast._t);
-        toast._t = setTimeout(() => toastEl.classList.remove("show"), 1300);
+        toast._t = setTimeout(() => els.toast.classList.remove("show"), 1300);
       }
 
-      const MATERIALS = [
-        {
-          id: "wood",
-          name: "Wood",
-          key: "1",
-          color: 0xb07a47,
-          roughness: 0.92,
-          metalness: 0.0,
-          emissive: 0x000000,
-          opacity: 1.0,
-          transparent: false
-        },
-        {
-          id: "brick",
-          name: "Brick",
-          key: "2",
-          color: 0xa63d2a,
-          roughness: 0.95,
-          metalness: 0.0,
-          emissive: 0x000000,
-          opacity: 1.0,
-          transparent: false
-        },
-        {
-          id: "concrete",
-          name: "Concrete",
-          key: "3",
-          color: 0x9aa0a6,
-          roughness: 1.0,
-          metalness: 0.0,
-          emissive: 0x000000,
-          opacity: 1.0,
-          transparent: false
-        },
-        {
-          id: "glass",
-          name: "Glass",
-          key: "4",
-          color: 0x6bdcff,
-          roughness: 0.08,
-          metalness: 0.0,
-          emissive: 0x0a1a22,
-          opacity: 0.35,
-          transparent: true
-        },
-        {
-          id: "custom",
-          name: "Custom",
-          key: "5",
-          color: 0x000000,
-          roughness: 0.25,
-          metalness: 0.0,
-          emissive: 0x000000,
-          opacity: 1.0,
-          transparent: false
+      function clampInt(n, min, max) {
+        return Math.max(min, Math.min(max, n | 0));
+      }
+
+      function hexStringToInt(hexStr) {
+        const clean = String(hexStr ?? "").trim().replace("#", "");
+        const n = parseInt(clean, 16);
+        return Number.isFinite(n) ? clampInt(n, 0x000000, 0xffffff) : null;
+      }
+
+      function intToHexString(n) {
+        return `#${(n >>> 0).toString(16).padStart(6, "0").toUpperCase()}`;
+      }
+
+      function setButtonPressed(containerEl, dataAttr, activeId) {
+        if (!containerEl) return;
+        for (const btn of containerEl.querySelectorAll("button.mat")) {
+          btn.setAttribute("aria-pressed", btn.dataset[dataAttr] === activeId ? "true" : "false");
         }
+      }
+
+      function setSwatchBackground(swatchEl, colorHexStr) {
+        if (!swatchEl) return;
+        swatchEl.style.background = `linear-gradient(135deg, rgba(255,255,255,0.18), rgba(0,0,0,0.20)), ${colorHexStr}`;
+      }
+
+      // ---------------------------------------------------------------------------
+      // Content definitions (data-only)
+      // ---------------------------------------------------------------------------
+      const CUSTOM_MAT_ID = "custom";
+
+      const MATERIALS = [
+        { id: "wood", name: "Wood", key: "1", color: 0xb07a47, roughness: 0.92, metalness: 0.0, emissive: 0x000000, opacity: 1.0, transparent: false },
+        { id: "brick", name: "Brick", key: "2", color: 0xa63d2a, roughness: 0.95, metalness: 0.0, emissive: 0x000000, opacity: 1.0, transparent: false },
+        { id: "concrete", name: "Concrete", key: "3", color: 0x9aa0a6, roughness: 1.0, metalness: 0.0, emissive: 0x000000, opacity: 1.0, transparent: false },
+        { id: "glass", name: "Glass", key: "4", color: 0x6bdcff, roughness: 0.08, metalness: 0.0, emissive: 0x0a1a22, opacity: 0.35, transparent: true },
+        { id: CUSTOM_MAT_ID, name: "Custom", key: "5", color: 0x000000, roughness: 0.25, metalness: 0.0, emissive: 0x000000, opacity: 1.0, transparent: false }
       ];
 
       const STRUCTURES = [
@@ -418,9 +404,8 @@
         }
       ];
 
-      const materialById = new Map();
-      for (const m of MATERIALS) {
-        materialById.set(
+      const materialById = new Map(
+        MATERIALS.map((m) => [
           m.id,
           new THREE.MeshStandardMaterial({
             color: m.color,
@@ -430,152 +415,31 @@
             opacity: m.opacity,
             transparent: m.transparent
           })
-        );
-      }
+        ])
+      );
 
-      const CUSTOM_MAT_ID = "custom";
+      const state = {
+        currentMatId: CUSTOM_MAT_ID,
+        currentStructureId: null,
+        lineMode: false,
+        lineStart: null,
+        lineEnd: null,
+        lastPlaceTarget: null,
+        lastRemoveTarget: null,
+        verticalMode: false,
+        ghostHeight: 0,
+        shiftDown: false
+      };
 
-      let currentMatId = "custom"; // Default material 
-      let currentStructureId = null;
-
-      function setStructure(id) {
-        currentStructureId = id;
-        for (const btn of structuresEl.querySelectorAll("button.mat")) {
-          btn.setAttribute("aria-pressed", btn.dataset.structure === currentStructureId ? "true" : "false");
-        }
-        if (!id) {
-          hintEl.textContent = "Single block mode.";
-          return;
-        }
-        const s = STRUCTURES.find((v) => v.id === id);
-        hintEl.textContent = `Structure: ${s?.name ?? id}. Click to place.`;
-      }
-
-      for (const m of MATERIALS) {
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "mat";
-        btn.dataset.mat = m.id;
-        btn.setAttribute("aria-pressed", m.id === currentMatId ? "true" : "false");
-        btn.title = m.key ? `Press ${m.key}` : `Select ${m.name}`;
-
-        const sw = document.createElement("div");
-        sw.className = "swatch";
-        sw.style.background = `linear-gradient(135deg, rgba(255,255,255,0.18), rgba(0,0,0,0.20)), #${m.color
-          .toString(16)
-          .padStart(6, "0")}`;
-        btn.appendChild(sw);
-
-        const nm = document.createElement("div");
-        nm.className = "name";
-        nm.textContent = m.name;
-        btn.appendChild(nm);
-
-        btn.addEventListener("click", () => setMaterial(m.id));
-        matsEl.appendChild(btn);
-      }
-
-      for (const s of STRUCTURES) {
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "mat";
-        btn.dataset.structure = s.id;
-        btn.setAttribute("aria-pressed", "false");
-        btn.title = `Press ${s.key.toUpperCase()}`;
-
-        const sw = document.createElement("div");
-        sw.className = "swatch";
-        sw.style.background =
-          "linear-gradient(135deg, rgba(255,255,255,0.22), rgba(0,0,0,0.22)), linear-gradient(90deg, #b07a47, #a66b3f)";
-        btn.appendChild(sw);
-
-        const nm = document.createElement("div");
-        nm.className = "name";
-        nm.textContent = `${s.name} (${s.key.toUpperCase()})`;
-        btn.appendChild(nm);
-
-        btn.addEventListener("click", () => setStructure(s.id));
-        structuresEl.appendChild(btn);
-      }
-
-      function setMaterial(id) {
-        if (!materialById.has(id)) return;
-        currentMatId = id;
-        if (currentStructureId) setStructure(null);
-        for (const btn of matsEl.querySelectorAll("button.mat")) {
-          btn.setAttribute("aria-pressed", btn.dataset.mat === currentMatId ? "true" : "false");
-        }
-        const mat = MATERIALS.find((m) => m.id === id);
-        hintEl.textContent = `Material: ${mat?.name ?? id}.`;
-        // Update the placement preview to match the selected material color.
-        const matObj = materialById.get(id);
-        if (matObj?.color && ghostMat) ghostMat.color.copy(matObj.color);
-        updateStructureSwatches(id);
-      }
-
-      function setCustomMaterialColor(hexStr) {
-        if (!materialById.has(CUSTOM_MAT_ID)) return;
-        const hex = parseInt(hexStr.replace("#", ""), 16);
-        if (Number.isNaN(hex)) return;
-
-        // Freeze already-placed custom blocks so future color changes
-        // only affect the preview/next placements.
-        for (const mesh of blocks.values()) {
-          if (mesh?.userData?.matId === CUSTOM_MAT_ID && mesh.material?.clone) {
-            mesh.material = mesh.material.clone();
-          }
-        }
-
-        const mat = materialById.get(CUSTOM_MAT_ID);
-        mat.color.setHex(hex);
-        // Keep label in sync.
-        if (customColorLabelEl) customColorLabelEl.textContent = `#${hexStr.replace("#", "").toUpperCase()}`;
-      }
-
-      if (customColorInputEl) {
-        // Initialize picker from current custom material color.
-        if (materialById.has(CUSTOM_MAT_ID)) {
-          const hexStr = `#${materialById.get(CUSTOM_MAT_ID).color.getHexString().toUpperCase()}`;
-          customColorInputEl.value = hexStr;
-          if (customColorLabelEl) customColorLabelEl.textContent = hexStr;
-        }
-
-        customColorInputEl.addEventListener("input", (e) => {
-          const hexStr = e.target.value;
-          MATERIALS[4].color = new THREE.MeshStandardMaterial(parseInt(hexStr.replace("#", "").toUpperCase(), 16));
-          // Find the swatch for MATERIALS[4] and update it
-          const swatchEl = matsEl.querySelector(`button[data-mat="${MATERIALS[4].id}"] .swatch`);
-          const floorSwatch = structuresEl.querySelector(`button[data-structure="floor"] .swatch`);
-          const wallSwatch = structuresEl.querySelector(`button[data-structure="wall"] .swatch`);
-          if (swatchEl) {
-            swatchEl.style.background = `linear-gradient(135deg, rgba(255,255,255,0.18), rgba(0,0,0,0.20)), ${hexStr}`;
-            floorSwatch.style.background = `linear-gradient(135deg, rgba(255,255,255,0.18), rgba(0,0,0,0.20)), ${hexStr}`;
-            wallSwatch.style.background = `linear-gradient(135deg, rgba(255,255,255,0.18), rgba(0,0,0,0.20)), ${hexStr}`;
-          }
-          setCustomMaterialColor(hexStr);
-          setMaterial(CUSTOM_MAT_ID);
-        });
-      }
-
-      function updateStructureSwatches(matId) {
-        const mat = MATERIALS.find(m => m.id === matId);
-        if (!mat) {
-          console.warn("No material found for id:", matId);
-          return;
-        }         
-        const floorSwatch = structuresEl.querySelector(`button[data-structure="floor"] .swatch`);
-        const wallSwatch = structuresEl.querySelector(`button[data-structure="wall"] .swatch`);
-        const hexStr = `#${mat.color.toString(16).padStart(6, "0")}`;
-        floorSwatch.style.background = `linear-gradient(135deg, rgba(255,255,255,0.18), rgba(0,0,0,0.20)), ${hexStr}`;
-        wallSwatch.style.background = `linear-gradient(135deg, rgba(255,255,255,0.18), rgba(0,0,0,0.20)), ${hexStr}`;
-      }
-
+      // ---------------------------------------------------------------------------
+      // Renderer + scene
+      // ---------------------------------------------------------------------------
       const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-      app.appendChild(renderer.domElement);
+      els.app.appendChild(renderer.domElement);
 
       const scene = new THREE.Scene();
       scene.fog = new THREE.FogExp2(0x0b0f14, 0.022);
@@ -657,7 +521,7 @@
       }
 
       function updateCounts() {
-        countsEl.textContent = `${blocks.size} block${blocks.size === 1 ? "" : "s"}`;
+        els.counts.textContent = `${blocks.size} block${blocks.size === 1 ? "" : "s"}`;
       }
 
       const ghostMat = new THREE.MeshStandardMaterial({
@@ -689,15 +553,6 @@
         opacity: 0.28,
         emissive: 0x103018
       });
-
-      //init global variables
-      let lineMode = false;
-      let lineStart = null;
-      let lineEnd = null;
-      let lastPlaceTarget = null;
-      let lastRemoveTarget = null;
-      let verticalMode = false;
-      let ghostHeight = 0;
 
       const undoStack = [];
       const MAX_UNDO_STEPS = 120;
@@ -744,7 +599,7 @@
         const prev = undoStack.pop();
         restoreBlocksFromData(prev);
         stopLineMode();
-        hintEl.textContent = "Click the ground to build.";
+        els.hint.textContent = "Click the ground to build.";
         toast("Undid previous step.");
       }
       
@@ -776,8 +631,8 @@
 
       function updateLinePreview(vertical) {
         clearLinePreview();
-        if (!lineMode || !lineStart || !lineEnd) return;
-        const cells = getLinePositions(lineStart, lineEnd,vertical);
+        if (!state.lineMode || !state.lineStart || !state.lineEnd) return;
+        const cells = getLinePositions(state.lineStart, state.lineEnd, vertical);
         for (const c of cells) {
           const m = new THREE.Mesh(blockGeo, linePreviewMat);
           m.position.set(c.x + 0.5, c.y + 0.5, c.z + 0.5);
@@ -788,9 +643,9 @@
       }
 
       function stopLineMode() {
-        lineMode = false;
-        lineStart = null;
-        lineEnd = null;
+        state.lineMode = false;
+        state.lineStart = null;
+        state.lineEnd = null;
         clearLinePreview();
       }
 
@@ -821,7 +676,7 @@
         if (!structure) return 0;
         let placed = 0;
         for (const b of structure.blocks) {
-          if (addBlock(baseX + b.x, baseY + b.y, baseZ + b.z, currentMatId)) placed++;
+          if (addBlock(baseX + b.x, baseY + b.y, baseZ + b.z, state.currentMatId)) placed++;
         }
         return placed;
       }
@@ -845,14 +700,14 @@
         blocks.clear();
         updateCounts();
       }
-      function initConcrete(){
-          for (let x = -50; x <= 50; x++) for (let z = -50; z <= 50; z++) addBlock(x, 0, z, "concrete");
+
+      function initConcrete() {
+        for (let x = -50; x <= 50; x++) for (let z = -50; z <= 50; z++) addBlock(x, 0, z, "concrete");
       }
       initConcrete();
 
       const raycaster = new THREE.Raycaster();
       const mouse = new THREE.Vector2();
-      let shiftDown = false;
 
       function setMouseFromEvent(e) {
         const rect = renderer.domElement.getBoundingClientRect();
@@ -871,10 +726,10 @@
 
         if (!hits.length) {
           ghost.visible = false;
-          lastPlaceTarget = null;
-          if (lineMode) {
-            lineEnd = null;
-            updateLinePreview(verticalMode);
+          state.lastPlaceTarget = null;
+          if (state.lineMode) {
+            state.lineEnd = null;
+            updateLinePreview(state.verticalMode);
           }
           return null;
         }
@@ -882,10 +737,10 @@
         const hit = hits[0];
         if (!hit.face) {
           ghost.visible = false;
-          lastPlaceTarget = null;
-          if (lineMode) {
-            lineEnd = null;
-            updateLinePreview(verticalMode);
+          state.lastPlaceTarget = null;
+          if (state.lineMode) {
+            state.lineEnd = null;
+            updateLinePreview(state.verticalMode);
           }
           return null;
         }
@@ -893,19 +748,19 @@
         // Ground placement
         if (hit.object === ground) {
           const g = getGridFromPoint(hit.point);
-          const y = verticalMode ? ghostHeight : 0;
+          const y = state.verticalMode ? state.ghostHeight : 0;
 
           ghost.position.set(g.x + 0.5, y + 0.5, g.z + 0.5);
           ghost.visible = true;
 
           const target = { mode: "place", x: g.x, y, z: g.z, on: "ground" };
-          lastPlaceTarget = target;
+          state.lastPlaceTarget = target;
 
-          if (lineMode && lineStart) {
-            lineEnd = verticalMode
-              ? { x: lineStart.x, y: target.y, z: lineStart.z }
+          if (state.lineMode && state.lineStart) {
+            state.lineEnd = state.verticalMode
+              ? { x: state.lineStart.x, y: target.y, z: state.lineStart.z }
               : { x: target.x, y: target.y, z: target.z };
-            updateLinePreview(verticalMode);
+            updateLinePreview(state.verticalMode);
           }
           return target;
         }
@@ -939,13 +794,13 @@
         ghost.visible = true;
 
         const target = { mode: "place", x: targetX, y: targetY, z: targetZ, on: "block" };
-        lastPlaceTarget = target;
+        state.lastPlaceTarget = target;
 
-        if (lineMode && lineStart) {
-          lineEnd = verticalMode
-            ? { x: lineStart.x, y: target.y, z: lineStart.z }
+        if (state.lineMode && state.lineStart) {
+          state.lineEnd = state.verticalMode
+            ? { x: state.lineStart.x, y: target.y, z: state.lineStart.z }
             : { x: target.x, y: target.y, z: target.z };
-          updateLinePreview(verticalMode);
+          updateLinePreview(state.verticalMode);
         }
         return target;
       }
@@ -1002,23 +857,153 @@
 
       window.addEventListener("contextmenu", (e) => e.preventDefault());
       
-      //Mouse wheel to control Vertical block height (ghost)
-      window.addEventListener("keydown", (e) => {
-        if (verticalMode) {
-          if (e.key.toLowerCase() === "v") {
-            ghostHeight++;
-          }
-          if (e.key.toLowerCase() === "b") {
-            if (ghostHeight>0){
-              ghostHeight--;
-            }
-          }
+      // ---------------------------------------------------------------------------
+      // UI: materials, structures, custom color
+      // ---------------------------------------------------------------------------
+      function updateMaterialSwatch(matId) {
+        const matDef = MATERIALS.find((m) => m.id === matId);
+        if (!matDef) return;
+        const swatchEl = els.materials.querySelector(`button[data-mat="${matId}"] .swatch`);
+        setSwatchBackground(swatchEl, intToHexString(matDef.color));
+      }
+
+      function updateStructureSwatchesFromMaterial(matId) {
+        const matDef = MATERIALS.find((m) => m.id === matId);
+        if (!matDef) return;
+        const hexStr = intToHexString(matDef.color);
+        const floorSwatch = els.structures.querySelector(`button[data-structure="floor"] .swatch`);
+        const wallSwatch = els.structures.querySelector(`button[data-structure="wall"] .swatch`);
+        setSwatchBackground(floorSwatch, hexStr);
+        setSwatchBackground(wallSwatch, hexStr);
+      }
+
+      function setStructure(id) {
+        state.currentStructureId = id;
+        setButtonPressed(els.structures, "structure", state.currentStructureId);
+        if (!id) {
+          els.hint.textContent = "Single block mode.";
+          return;
         }
+        const s = STRUCTURES.find((v) => v.id === id);
+        els.hint.textContent = `Structure: ${s?.name ?? id}. Click to place.`;
+      }
+
+      function setMaterial(id) {
+        if (!materialById.has(id)) return;
+        state.currentMatId = id;
+        if (state.currentStructureId) setStructure(null);
+        setButtonPressed(els.materials, "mat", state.currentMatId);
+
+        const matDef = MATERIALS.find((m) => m.id === id);
+        els.hint.textContent = `Material: ${matDef?.name ?? id}.`;
+
+        // Update the placement preview to match the selected material color.
+        const matObj = materialById.get(id);
+        if (matObj?.color && ghostMat) ghostMat.color.copy(matObj.color);
+
+        updateStructureSwatchesFromMaterial(id);
+      }
+
+      function setCustomMaterialColor(hexStr) {
+        const hex = hexStringToInt(hexStr);
+        if (hex === null) return;
+
+        const customDef = MATERIALS.find((m) => m.id === CUSTOM_MAT_ID);
+        if (customDef) customDef.color = hex;
+
+        // Freeze already-placed custom blocks so future color changes only affect the preview/next placements.
+        for (const mesh of blocks.values()) {
+          if (mesh?.userData?.matId === CUSTOM_MAT_ID && mesh.material?.clone) mesh.material = mesh.material.clone();
+        }
+
+        const mat = materialById.get(CUSTOM_MAT_ID);
+        if (mat?.color) mat.color.setHex(hex);
+
+        const canon = intToHexString(hex);
+        if (els.customColorLabel) els.customColorLabel.textContent = canon;
+        if (els.customColorInput) els.customColorInput.value = canon;
+
+        updateMaterialSwatch(CUSTOM_MAT_ID);
+        updateStructureSwatchesFromMaterial(CUSTOM_MAT_ID);
+      }
+
+      function initMaterialButtons() {
+        for (const m of MATERIALS) {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "mat";
+          btn.dataset.mat = m.id;
+          btn.setAttribute("aria-pressed", m.id === state.currentMatId ? "true" : "false");
+          btn.title = m.key ? `Press ${m.key}` : `Select ${m.name}`;
+
+          const sw = document.createElement("div");
+          sw.className = "swatch";
+          setSwatchBackground(sw, intToHexString(m.color));
+          btn.appendChild(sw);
+
+          const nm = document.createElement("div");
+          nm.className = "name";
+          nm.textContent = m.name;
+          btn.appendChild(nm);
+
+          btn.addEventListener("click", () => setMaterial(m.id));
+          els.materials.appendChild(btn);
+        }
+      }
+
+      function initStructureButtons() {
+        for (const s of STRUCTURES) {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "mat";
+          btn.dataset.structure = s.id;
+          btn.setAttribute("aria-pressed", "false");
+          btn.title = `Press ${s.key.toUpperCase()}`;
+
+          const sw = document.createElement("div");
+          sw.className = "swatch";
+          sw.style.background =
+            "linear-gradient(135deg, rgba(255,255,255,0.22), rgba(0,0,0,0.22)), linear-gradient(90deg, #b07a47, #a66b3f)";
+          btn.appendChild(sw);
+
+          const nm = document.createElement("div");
+          nm.className = "name";
+          nm.textContent = `${s.name} (${s.key.toUpperCase()})`;
+          btn.appendChild(nm);
+
+          btn.addEventListener("click", () => setStructure(s.id));
+          els.structures.appendChild(btn);
+        }
+      }
+
+      initMaterialButtons();
+      initStructureButtons();
+
+      if (els.customColorInput && materialById.has(CUSTOM_MAT_ID)) {
+        const currentHex = `#${materialById.get(CUSTOM_MAT_ID).color.getHexString().toUpperCase()}`;
+        els.customColorInput.value = currentHex;
+        if (els.customColorLabel) els.customColorLabel.textContent = currentHex;
+
+        els.customColorInput.addEventListener("input", (e) => {
+          const hexStr = e.target.value;
+          setCustomMaterialColor(hexStr);
+          setMaterial(CUSTOM_MAT_ID);
+        });
+      }
+
+      // ---------------------------------------------------------------------------
+      // Input
+      // ---------------------------------------------------------------------------
+      // Keyboard controls for vertical placement height (when in vertical mode).
+      window.addEventListener("keydown", (e) => {
+        if (!state.verticalMode) return;
+        if (e.key.toLowerCase() === "v") state.ghostHeight++;
+        if (e.key.toLowerCase() === "b") state.ghostHeight = Math.max(0, state.ghostHeight - 1);
       });
 
       renderer.domElement.addEventListener("pointermove", (e) => {
-        updateGhost(e,verticalMode);
-        lastRemoveTarget = updateRemoveTarget(e);
+        updateGhost(e);
+        state.lastRemoveTarget = updateRemoveTarget(e);
       });
 
       function targetKey(t) {
@@ -1029,7 +1014,7 @@
       // Attempts to place at a given target.
       // Returns the number of blocks placed (0 means occupied / no-op).
       function tryPlaceAtTarget(target) {
-        if (!target || lineMode) return 0;
+        if (!target || state.lineMode) return 0;
 
         const key = targetKey(target);
         if (placeHold.lastTargetKey !== key) {
@@ -1041,10 +1026,10 @@
         if (placeHold.lastAttemptFailed) return 0;
 
         let placed = 0;
-        if (currentStructureId) {
-          placed = placeStructureAt(target.x, target.y, target.z, currentStructureId);
+        if (state.currentStructureId) {
+          placed = placeStructureAt(target.x, target.y, target.z, state.currentStructureId);
         } else {
-          placed = addBlock(target.x, target.y, target.z, currentMatId) ? 1 : 0;
+          placed = addBlock(target.x, target.y, target.z, state.currentMatId) ? 1 : 0;
         }
 
         if (placed > 0) {
@@ -1060,7 +1045,7 @@
 
       renderer.domElement.addEventListener("pointerdown", (e) => {
         if (e.button ===  0) {
-          const t = lastRemoveTarget;
+          const t = state.lastRemoveTarget;
           if (!t || t.y<=0) return;
           let ok = false;
           runWithUndo(() => {
@@ -1071,7 +1056,7 @@
         if (e.button === 2) {
           // Right-click placing (press & hold).
           e.preventDefault();
-          if (lineMode) return;
+          if (state.lineMode) return;
 
           placeHold.down = true;
           placeHold.before = serializeBlocks();
@@ -1081,14 +1066,14 @@
           placeHold.lastAttemptFailed = false;
           placeHold.nextAttemptAt = 0; // attempt immediately
 
-          const target = updateGhost(e,verticalMode);
+          const target = updateGhost(e);
           if (!target) return;
 
           const placedNow = tryPlaceAtTarget(target);
           // Keep original click behavior for the first attempt only.
-          if (currentStructureId) {
+          if (state.currentStructureId) {
             if (placedNow === 0) toast("Structure space is occupied.");
-            else toast(`Placed ${placedNow} blocks (${currentStructureId}).`);
+            else toast(`Placed ${placedNow} blocks (${state.currentStructureId}).`);
           } else {
             if (placedNow === 0) toast("That space is occupied.");
           }
@@ -1106,8 +1091,8 @@
         if (shouldCommit) recordUndoSnapshot(placeHold.before);
 
         // Optional summary toast only for structure holds.
-        if (shouldCommit && currentStructureId && placeHold.totalPlaced > 0) {
-          toast(`Placed ${placeHold.totalPlaced} blocks (${currentStructureId}).`);
+        if (shouldCommit && state.currentStructureId && placeHold.totalPlaced > 0) {
+          toast(`Placed ${placeHold.totalPlaced} blocks (${state.currentStructureId}).`);
         }
 
         // Reset
@@ -1138,7 +1123,7 @@
           undoLastAction();
           return;
         }
-        if (e.key === "Shift") shiftDown = true;
+        if (e.key === "Shift") state.shiftDown = true;
 
         // Camera movement (W/A/S/D). Keep Shift+W as the "Wall" shortcut.
         const k = e.key.toLowerCase();
@@ -1161,80 +1146,81 @@
         }
         
         if (e.key.toLowerCase() === "e") {
-          verticalMode = false;
+          state.verticalMode = false;
           e.preventDefault();
-          if (!lineMode) {
-            if (!lastPlaceTarget) {
+          if (!state.lineMode) {
+            if (!state.lastPlaceTarget) {
               toast("Hover a target cell first.");
               return;
             }
-            lineMode = true;
-            lineStart = { x: lastPlaceTarget.x, y: lastPlaceTarget.y, z: lastPlaceTarget.z };
-            lineEnd = { ...lineStart };
-            updateLinePreview(verticalMode);
-            hintEl.textContent = "Line mode: move cursor to set end, press E again to confirm.";
+            state.lineMode = true;
+            state.lineStart = { x: state.lastPlaceTarget.x, y: state.lastPlaceTarget.y, z: state.lastPlaceTarget.z };
+            state.lineEnd = { ...state.lineStart };
+            updateLinePreview(state.verticalMode);
+            els.hint.textContent = "Line mode: move cursor to set end, press E again to confirm.";
             return;
           }
 
-          if (!lineStart || !lineEnd) {
+          if (!state.lineStart || !state.lineEnd) {
             toast("Move the cursor to select a line.");
             return;
           }
 
-          const cells = getLinePositions(lineStart, lineEnd, verticalMode);
+          const cells = getLinePositions(state.lineStart, state.lineEnd, state.verticalMode);
           let placed = 0;
           runWithUndo(() => {
-            for (const c of cells) if (addBlock(c.x, c.y, c.z, currentMatId)) placed++;
+            for (const c of cells) if (addBlock(c.x, c.y, c.z, state.currentMatId)) placed++;
           });
           stopLineMode();
           if (placed === 0) toast("No blocks placed (line already occupied).");
           else toast(`Placed ${placed} block${placed === 1 ? "" : "s"} in a line.`);
-          hintEl.textContent = "Right Click the ground to build.";
+          els.hint.textContent = "Right Click the ground to build.";
           return;
         }
         
         if (e.key.toLowerCase() === "q") {
-          verticalMode = true;
+          state.verticalMode = true;
           e.preventDefault();
 
-            if (!lineMode) {
-              if (!lastPlaceTarget) {
+            if (!state.lineMode) {
+              if (!state.lastPlaceTarget) {
                 toast("Hover a target cell first.");
                 return;
               }
-              lineMode = true;
+              state.lineMode = true;
               // Start point includes y-axis
-              lineStart = { x: lastPlaceTarget.x, y: ghostHeight, z: lastPlaceTarget.z };
-              lineEnd = { ...lineStart };
-              updateLinePreview(verticalMode);
-              hintEl.textContent = "Vertical line mode: press E again to confirm.\nPress V to increase height \nPress B to decrease height \nCurrent Height: " + ghostHeight;
-              hintEl.style.whiteSpace = "pre-line"; 
+              state.lineStart = { x: state.lastPlaceTarget.x, y: state.ghostHeight, z: state.lastPlaceTarget.z };
+              state.lineEnd = { ...state.lineStart };
+              updateLinePreview(state.verticalMode);
+              els.hint.textContent =
+                "Vertical line mode: press E again to confirm.\nPress V to increase height \nPress B to decrease height \nCurrent Height: " + state.ghostHeight;
+              els.hint.style.whiteSpace = "pre-line"; 
               return;
             }
 
-            if (!lineStart || !lineEnd) {
+            if (!state.lineStart || !state.lineEnd) {
               toast("Move the cursor to select a vertical line.");
               return;
             }
 
             // Instead of getLinePositions on x/z, make sure it calculates along y
-            const cells = getLinePositions(lineStart, lineEnd, true); // pass axis if your helper supports it
+            const cells = getLinePositions(state.lineStart, state.lineEnd, true);
             let placed = 0;
             runWithUndo(() => {
               for (const c of cells) {
-                if (addBlock(c.x, c.y, c.z, currentMatId)) placed++;
+                if (addBlock(c.x, c.y, c.z, state.currentMatId)) placed++;
               }
             });
             stopLineMode();
             if (placed === 0) toast("No blocks placed (line already occupied).");
             else toast(`Placed ${placed} block${placed === 1 ? "" : "s"} in a vertical line.`);
-            hintEl.textContent = "Click the ground to build.";
+            els.hint.textContent = "Click the ground to build.";
             return;
         }
 
-        if (e.key === "Escape" && lineMode) {
+        if (e.key === "Escape" && state.lineMode) {
           stopLineMode();
-          hintEl.textContent = "Click the ground to build.";
+          els.hint.textContent = "Click the ground to build.";
           toast("Line mode cancelled.");
           return;
         }
@@ -1247,7 +1233,7 @@
       });
 
       window.addEventListener("keyup", (e) => {
-        if (e.key === "Shift") shiftDown = false;
+        if (e.key === "Shift") state.shiftDown = false;
         const k = e.key.toLowerCase();
         if (k === "w") moveState.w = false;
         if (k === "a") moveState.a = false;
@@ -1294,9 +1280,9 @@
         controls.update();
 
         // If RMB is held, keep placing repeatedly at a controlled rate.
-        if (placeHold.down && !lineMode && t1 >= placeHold.nextAttemptAt) {
+        if (placeHold.down && !state.lineMode && t1 >= placeHold.nextAttemptAt) {
           placeHold.nextAttemptAt = t1 + PLACE_INTERVAL_MS;
-          tryPlaceAtTarget(lastPlaceTarget);
+          tryPlaceAtTarget(state.lastPlaceTarget);
         }
 
         sun.position.x = 18 + Math.sin(t1 * 0.00015) * 6;
@@ -1314,7 +1300,7 @@
       }
 
       updateCounts();
-      setMaterial(currentMatId);
+      setMaterial(state.currentMatId);
       toast("Tip: RMB place blocks. F/T/H choose structures. Shift+W = Wall. WASD moves camera. Q/Z = up/down. E line-builds. Custom color uses the color picker. Ctrl+S saves.");
       tick();
     </script>
